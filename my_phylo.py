@@ -320,6 +320,7 @@ def run_my_phylo(build_tree, reps=500, n_leaves=8, theta=0.9,
     plt.grid(True)
 
     plt.savefig(this_dir + "/overall_correct_tree.png")
+    plt.close()
 
     # Overall inferred‑ML root accuracy
     plt.figure(figsize=(6,4))
@@ -331,6 +332,7 @@ def run_my_phylo(build_tree, reps=500, n_leaves=8, theta=0.9,
     plt.grid(True)
 
     plt.savefig(this_dir + "/overall_root_acc.png")
+    plt.close()
 
     # 2×2 summary
     fig, axes = plt.subplots(2,2,figsize=(10,8), constrained_layout=True)
@@ -353,6 +355,7 @@ def run_my_phylo(build_tree, reps=500, n_leaves=8, theta=0.9,
     ax3.set_xlabel('L1'); ax3.set_ylabel('ML (true) −ML (inf)'); ax3.grid(True)
 
     plt.savefig(this_dir + "/summary.png")
+    plt.close()
 
     # Conditional‑accuracy (only inferred ML)
     plt.figure(figsize=(6,4))
@@ -365,4 +368,5 @@ def run_my_phylo(build_tree, reps=500, n_leaves=8, theta=0.9,
     plt.legend(); plt.grid(True)
 
     plt.savefig(this_dir + "/cond_acc.png")
+    plt.close()
 
