@@ -2,7 +2,7 @@ import my_phylo as mp
 import numpy as np
 
 # --- Balanced tree builder --------------------------------------------------
-def build_balanced_tree(n_leaves: int, branch_length: float) -> mp.Node:
+def binary_tree(n_leaves: int, branch_length: float) -> mp.Node:
     if n_leaves & (n_leaves - 1) != 0:
         raise ValueError("n_leaves must be a power of two for a perfect balanced tree.")
     leaves = [mp.Node(f"L{i}") for i in range(n_leaves)]

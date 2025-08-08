@@ -2,7 +2,7 @@ import my_phylo as mp
 import numpy as np
 
 # --- Yule tree builder -------------------------------------------------------
-def build_yule_tree(n_leaves: int, branch_length: float, rng) -> mp.Node:
+def yule_tree(n_leaves: int, branch_length: float, rng) -> mp.Node:
     """
     Pure‐birth (Yule) tree: start with one lineage, then
   repeatedly pick one random leaf to speciate until we

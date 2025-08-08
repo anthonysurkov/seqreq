@@ -22,7 +22,7 @@ def main():
     for theta in thetas:
         print(f"--- THETA = {theta:.2f} ------------------------")
         mp.run_my_phylo(
-            build_tree = binary.build_balanced_tree,
+            build_tree = binary.binary_tree,
             reps       = REPS,
             n_leaves   = NUM_LEAVES,
             theta      = theta,

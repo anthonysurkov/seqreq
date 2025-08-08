@@ -2,7 +2,7 @@ import my_phylo as mp
 import numpy as np
 
 # --- Caterpillar builder ---------------------------------------------------
-def build_caterpillar_tree(n_leaves: int, theta: float) -> mp.Node:
+def caterpillar_tree(n_leaves: int, theta: float) -> mp.Node:
     """
     Build a discrete‐CFN “caterpillar” tree on n_leaves,
     where every edge has correlation parameter theta.
