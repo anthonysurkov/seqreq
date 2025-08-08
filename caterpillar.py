@@ -42,16 +42,3 @@ def build_caterpillar_tree(n_leaves: int, theta: float) -> mp.Node:
             current.bl = [theta, theta]
     return root
 
-# --- Main ------------------------------------------------------------------
-def main():
-    rng = np.random.default_rng(42)
-    theta = 0.8
-    n_leaves = 8
-    L1_vals = np.logspace(0.5, 2.5, 30, base=10, dtype=int).tolist()
-    L2 = 100
-    reps = 100
-
-    mp.run_my_phylo(build_caterpillar_tree, reps=reps, L1_vals=L1_vals, rng=rng, theta=theta)
-
-if __name__ == '__main__':
-    main()
