@@ -57,13 +57,13 @@ def build_yule_tree(n_leaves: int, branch_length: float, rng) -> mp.Node:
 # --- Main ------------------------------------------------------------------
 def main():
     rng = np.random.default_rng(42)
-    theta = 0.25
+    theta = 0.9
     n_leaves = 10
-    L1_vals = np.logspace(0.5, 2.5, 30, base=10, dtype=int).tolist()
+    L1_vals = np.logspace(1, 3, 30, base=10, dtype=int).tolist()
     L2 = 100
-    reps = 400
+    reps = 100
 
-    mp.run_my_phylo(build_yule_tree, rng=rng, reps=reps, L1_vals=L1_vals)
+    mp.run_my_phylo(build_yule_tree, rng=rng, reps=reps, L1_vals=L1_vals, theta=theta)
 
 if __name__ == '__main__':
     main()
