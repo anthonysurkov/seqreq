@@ -51,51 +51,58 @@ def infer_tree_ml(phylip_path: str, workdir: str) -> Phylo.BaseTree.Tree:
     cmd = [
         _IQTREE,
         "-s", phylip_path,
-        "-m", "JC",
+        "-st", "BIN",
+        "-m", "JC2", # JC2 = CFN
         "-nt", "4",
         "-fast",
         "-quiet",
         "-pre", prefix
     ]
-    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    proc = subprocess.run(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True
+    )
     if proc.returncode != 0:
         raise RuntimeError(f"IQ‑TREE failed:\n{proc.stderr}")
     # IQ‑TREE writes the best‐tree to <prefix>.treefile
     return Phylo.read(prefix + ".treefile", "newick")
 
-# --- Jukes–Cantor simulation ------------------------------------------------
-EXP_COEF = -4.0/3.0
 
-def simulate_jc(node: Node, rng: Generator) -> None:
+# --- Cavender-Ferris-Newman (CFN) simulation -------------------------------
+def simulate_cfn(node: Node, rng: Generator) -> None:
     if node.is_leaf():
         return
     L = len(node.seq)
     for child, bl in zip(node.children, node.bl):
-        p_same = 0.25 + 0.75 * math.exp(EXP_COEF * bl)
+        p_same = (1 + bl) / 2
         u = rng.random(L)
         seq = node.seq.copy()
+        # mutation:
         muts = np.where(u >= p_same)[0]
-        for pos in muts:
-            choices = [b for b in range(4) if b != seq[pos]]
-            seq[pos] = rng.choice(choices)
+        seq[muts] = 1 - seq[muts]
         child.seq = seq
-        simulate_jc(child, rng)
+        simulate_cfn(child, rng)
 
 # --- Distance & θ estimation -----------------------------------------------
-def jc_dist(x: np.ndarray, y: np.ndarray) -> float:
-    p = min(max(np.mean(x != y), 0.0), 0.75 - 1e-8)
-    return -0.75 * math.log(1 - (4.0/3.0) * p)
+def cfn_dist(x: np.ndarray, y: np.ndarray) -> float:
+    p = np.mean(x != y)
+    p = min(max(p, 0.0), 0.5 - 1e-8) # bound p to avoid log of zero or negative
+    return -0.5 * math.log(1 - 2 * p)
 
 def estimate_theta_hat(leaves: List[Node]) -> float:
     seqs = [leaf.seq for leaf in leaves]
-    d_sum = 0.0
-    for i in range(len(seqs)):
-        for j in range(i+1, len(seqs)):
-            d_sum += jc_dist(seqs[i], seqs[j])
-    pairs = len(seqs)*(len(seqs)-1)/2
-    d_bar = d_sum / pairs
-    depth = int(math.log2(len(seqs)))
-    return d_bar / (2 * depth)
+    n = len(seqs)
+    depth = int(math.log2(n))
+    cs = []
+    for i in range(n):
+        for j in range(i+1, n):
+            p = np.mean(seqs[i] != seqs[j])
+            c = 1 - 2*p
+            cs.append(c)
+    c_bar = np.mean(cs)
+    return c_bar ** (1 / (2*depth))
 
 # --- Biopython -> Node conversion -------------------------------------------
 def convert_clade(clade) -> Node:
@@ -107,26 +114,6 @@ def convert_clade(clade) -> Node:
         cn.bl = [bl]
         node.children.append(cn)
     return node
-
-# --- NJ inference with JC correction ----------------------------------------
-def infer_nj_tree(leaves: List[Node]) -> Node:
-    seqs = [leaf.seq for leaf in leaves]
-    names = [leaf.name for leaf in leaves]
-    n = len(seqs)
-    pdist_mat = np.zeros((n, n), float)
-    for i in range(n):
-        for j in range(i+1, n):
-            p = np.mean(seqs[i] != seqs[j])
-            p = min(max(p, 0.0), 0.75 - 1e-8)
-            pdist_mat[i, j] = pdist_mat[j, i] = -0.75 * math.log(1 - (4.0/3.0) * p)
-    mat: List[List[float]] = []
-    for i in range(n):
-        row = [float(pdist_mat[i, j]) for j in range(i)]
-        row.append(0.0)
-        mat.append(row)
-    dm = DistanceMatrix(names, mat)
-    nj = DistanceTreeConstructor().nj(dm)
-    return convert_clade(nj.root)
 
 # --- Splits & comparison ---------------------------------------------------
 def splits(tree: Node) -> Set[frozenset[str]]:
@@ -149,19 +136,24 @@ def splits(tree: Node) -> Set[frozenset[str]]:
 def unrooted_equal(t1: Node, t2: Node) -> bool:
     return splits(t1) == splits(t2)
 
-# --- Root reconstruction via ML JR (pruning) --------------------------------
+# --- Root reconstruction via ML joint reconstruction (pruning) ---------------
 def prune_lik(node: Node, theta: float) -> np.ndarray:
     if node.is_leaf():
         L = len(node.seq)
-        M = np.zeros((4, L))
-        for b in range(4): M[b] = (node.seq == b).astype(float)
+        M = np.zeros((2, L))
+        for b in (0, 1):
+            M[b, :] = (node.seq == b).astype(float)
         return M
+
     mats = [prune_lik(c, theta) for c in node.children]
-    ps = 0.25 + 0.75 * math.exp(EXP_COEF * theta)
-    pd = 0.25 * (1 - math.exp(EXP_COEF * theta))
-    Lm = np.ones_like(mats[0])
-    for M in mats:
-        Lm *= (ps*M + pd*(M.sum(axis=0)-M))
+    Lm   = np.ones_like(mats[0])
+
+    ps = (1 + theta) / 2
+    pd = (1 - theta) / 2
+
+    for mat in mats:
+        for b in (0, 1):
+            Lm[b, :] *= (ps * mat[b, :] + pd * mat[1-b, :])
     return Lm
 
 def reconstruct_root_sequence(tree: Node, theta: float) -> np.ndarray:
@@ -182,14 +174,14 @@ def reconstruct_root_majority(tree: Node, rng: Generator) -> np.ndarray:
         root_pred[i] = rng.choice(modes)
     return root_pred
 
+# --- Binary PHYLIP writer ---------------------------------------------------
 def write_phylip(leaves: List[Node], path: str) -> None:
-    int2char = {0:'A',1:'C',2:'G',3:'T'}
     n, L = len(leaves), len(leaves[0].seq)
     with open(path, 'w') as fh:
         fh.write(f"{n} {L}\n")
         for lf in leaves:
             name = lf.name[:10].ljust(10)
-            seq  = ''.join(int2char[int(b)] for b in lf.seq)
+            seq = ''.join(str(int(b)) for b in lf.seq)
             fh.write(f"{name}{seq}\n")
 
 # --- Single replicate -------------------------------------------------------
@@ -217,8 +209,8 @@ def run_rep(build_tree,
         T1 = build_tree(n_leaves, theta, rng=rng)
     else:
         T1 = build_tree(n_leaves, theta)
-    T1.seq = rng.integers(0,4,size=L1)
-    simulate_jc(T1, rng)
+    T1.seq = rng.integers(0,2,size=L1)
+    simulate_cfn(T1, rng)
     theta_hat = estimate_theta_hat(T1.leaves())
 
     # (B) attach ghost outgroup at T1’s root
@@ -242,8 +234,8 @@ def run_rep(build_tree,
 
     # (D) simulate T2 on the same augmented shape with L2, then strip OG
     T2aug = deepcopy(aug_root)
-    T2aug.seq = rng.integers(0,4,size=L2)
-    simulate_jc(T2aug, rng)
+    T2aug.seq = rng.integers(0,2,size=L2)
+    simulate_cfn(T2aug, rng)
     l2, r2 = T2aug.children
     T2 = r2 if any(l.name=="OG" for l in l2.leaves()) else l2
 
@@ -268,8 +260,8 @@ def run_rep(build_tree,
     return ok, abs(theta_hat - theta), acc_ml_true, acc_ml_inf, acc_mr
 
 # --- Main logic -----------------------------------------------------------
-def run_my_phylo(build_tree, reps=1000, n_leaves=8, theta=0.25,
-                 L1_vals=np.logspace(0.5, 3, 30, base=10, dtype=int).tolist(),
+def run_my_phylo(build_tree, reps=500, n_leaves=8, theta=0.9,
+                 L1_vals=np.logspace(1, 3, 30, base=10, dtype=int).tolist(),
                  L2=100, rng=None):
     ok_vals = []
     th_err_vals = []
@@ -278,6 +270,8 @@ def run_my_phylo(build_tree, reps=1000, n_leaves=8, theta=0.25,
     mr_vals = []
     acc_if_good_vals = []
     acc_if_bad_vals = []
+
+    L1_vals = [L for L in L1_vals if L != 4] # remove evil L1 = 4 case
 
     print(f"  L1 | θ_err  | ML_true | ML_inf  | MR")
     for L1 in L1_vals:
