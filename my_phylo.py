@@ -305,6 +305,11 @@ def run_my_phylo(build_tree, reps=500, n_leaves=8, theta=0.9,
         print(f"{L1:4d} | {th_err_vals[-1]:6.3f} | {ml_true_vals[-1]:7.3f}"
               f" | {ml_inf_vals[-1]:7.3f} | {mr_vals[-1]:5.3f}")
 
+    # --- PLOTTING -------------------------------------------------------------
+    this_dir = f"plots/{build_tree.__name__}/theta{theta:.2f}"
+    os.makedirs(this_dir, exist_ok=True)
+    shutil.copyfile("utils/open_all.py", f"{this_dir}/open_all.py")
+
     # Probability of correct tree reconstruction
     plt.figure(figsize=(6,4))
     plt.plot(L1_vals, ok_vals, 'o-')
@@ -314,6 +319,8 @@ def run_my_phylo(build_tree, reps=500, n_leaves=8, theta=0.9,
     plt.title('Probability of Correct Tree Reconstruction Over L1 (ML inferred)')
     plt.grid(True)
 
+    plt.savefig(this_dir + "/overall_correct_tree.png")
+
     # Overall inferred‑ML root accuracy
     plt.figure(figsize=(6,4))
     plt.plot(L1_vals, ml_inf_vals, 'o-')
@@ -322,6 +329,8 @@ def run_my_phylo(build_tree, reps=500, n_leaves=8, theta=0.9,
     plt.ylabel('Overall root accuracy (ML inferred)')
     plt.title('Overall Root Reconstruction Accuracy Over L1')
     plt.grid(True)
+
+    plt.savefig(this_dir + "/overall_root_acc.png")
 
     # 2×2 summary
     fig, axes = plt.subplots(2,2,figsize=(10,8), constrained_layout=True)
@@ -343,15 +352,7 @@ def run_my_phylo(build_tree, reps=500, n_leaves=8, theta=0.9,
     ax3.set_xscale('log'); ax3.set_title('Loss from Topology Error')
     ax3.set_xlabel('L1'); ax3.set_ylabel('ML (true) −ML (inf)'); ax3.grid(True)
 
-    err_inf  = 1 - np.array(ml_inf_vals)
-    err_true = 1 - np.array(ml_true_vals)
-    err_mr   = 1 - np.array(mr_vals)
-    ax4.plot(L1_vals, err_inf,  's-',  label='Err ML (inferred tree)')
-    ax4.plot(L1_vals, err_true, 'o-',  label='Err ML (true tree)')
-    ax4.plot(L1_vals, err_mr,   'x--', label='Err MR')
-    ax4.set_xscale('log'); ax4.set_title('Error Rates vs L1')
-    ax4.set_xlabel('L1'); ax4.set_ylabel('Error rate')
-    ax4.legend(); ax4.grid(True)
+    plt.savefig(this_dir + "/summary.png")
 
     # Conditional‑accuracy (only inferred ML)
     plt.figure(figsize=(6,4))
@@ -363,5 +364,5 @@ def run_my_phylo(build_tree, reps=500, n_leaves=8, theta=0.9,
     plt.title('ML Accuracy Conditional on Tree Recovery')
     plt.legend(); plt.grid(True)
 
-    plt.show()
+    plt.savefig(this_dir + "/cond_acc.png")
 

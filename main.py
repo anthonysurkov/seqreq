@@ -20,7 +20,7 @@ def main():
     thetas = np.linspace(START_THETA, END_THETA, NUM_THETAS, dtype=float).tolist()
 
     for theta in thetas:
-        print(theta)
+        print(f"--- THETA = {theta:.2f} ------------------------")
         mp.run_my_phylo(
             build_tree = binary.build_balanced_tree,
             reps       = REPS,
