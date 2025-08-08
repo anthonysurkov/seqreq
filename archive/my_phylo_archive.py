@@ -18,3 +18,22 @@ def simulate_jc(node: Node, rng: Generator) -> None:
         child.seq = seq
         simulate_jc(child, rng)
 
+# --- NJ inference -----------------------------------------------------------
+def infer_nj_tree(leaves: List[Node]) -> Node:
+    seqs = [leaf.seq for leaf in leaves]
+    names = [leaf.name for leaf in leaves]
+    n = len(seqs)
+    pdist_mat = np.zeros((n, n), float)
+    for i in range(n):
+        for j in range(i+1, n):
+            p = np.mean(seqs[i] != seqs[j])
+            p = min(max(p, 0.0), 0.75 - 1e-8)
+            pdist_mat[i, j] = pdist_mat[j, i] = -0.75 * math.log(1 - (4.0/3.0) * p)
+    mat: List[List[float]] = []
+    for i in range(n):
+        row = [float(pdist_mat[i, j]) for j in range(i)]
+        row.append(0.0)
+        mat.append(row)
+    dm = DistanceMatrix(names, mat)
+    nj = DistanceTreeConstructor().nj(dm)
+    return convert_clade(nj.root)
