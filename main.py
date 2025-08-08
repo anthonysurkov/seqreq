@@ -5,19 +5,19 @@ import caterpillar
 import yule
 
 # Theta params
-START_THETA = 0.7
-END_THETA   = 0.8
-NUM_THETAS  = 2
+START_THETA = 0.6
+END_THETA   = 0.9
+NUM_THETAS  = 7
 
 # Functions
 FXN_LIST    = [
-    binary.binary_tree,
-    caterpillar.caterpillar_tree,
+    #binary.binary_tree,
+    #aterpillar.caterpillar_tree,
     yule.yule_tree
 ]
 
 # Other
-REPS        = 10
+REPS        = 200
 NUM_LEAVES  = 8
 L1_VALS     = np.logspace(1, 3, 30, base=10, dtype=int).tolist()
 L2_VAL      = 100

@@ -8,6 +8,7 @@ import subprocess
 import inspect
 from copy import deepcopy
 from typing import List, Tuple, Set
+from itertools import product
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -69,7 +70,6 @@ def infer_tree_ml(phylip_path: str, workdir: str) -> Phylo.BaseTree.Tree:
     # IQ‑TREE writes the best‐tree to <prefix>.treefile
     return Phylo.read(prefix + ".treefile", "newick")
 
-
 # --- Cavender-Ferris-Newman (CFN) simulation -------------------------------
 def simulate_cfn(node: Node, rng: Generator) -> None:
     if node.is_leaf():
@@ -102,6 +102,7 @@ def estimate_theta_hat(leaves: List[Node]) -> float:
             c = 1 - 2*p
             cs.append(c)
     c_bar = np.mean(cs)
+    c_bar = np.clip(c_bar, 0.0, 1.0) # disallows negative c_bar, avoids nan
     return c_bar ** (1 / (2*depth))
 
 # --- Biopython -> Node conversion -------------------------------------------
@@ -183,6 +184,31 @@ def write_phylip(leaves: List[Node], path: str) -> None:
             name = lf.name[:10].ljust(10)
             seq = ''.join(str(int(b)) for b in lf.seq)
             fh.write(f"{name}{seq}\n")
+
+# --- Calculate the baseline -------------------------------------------------
+def theoretical_root_accuracy(build_tree, n_leaves, theta, rng):
+    """
+    Compute the Bayes‐optimal (i.e. ML with infinite sites) root‐accuracy
+    for a discrete‐CFN tree generator `build_tree(n_leaves, theta)`.
+    """
+    # 1) build the tree; leaves inherit .children and .bl
+    root = build_tree(n_leaves, theta, rng=rng)
+    leaves = root.leaves()
+    n = len(leaves)
+
+    total = 0.0
+    # 2) enumerate every possible assignment of {0,1} to the n leaves
+    for bits in product([0,1], repeat=n):
+        # label each leaf with that single‐site state
+        for leaf, b in zip(leaves, bits):
+            leaf.seq = np.array([b], dtype=int)
+
+        # 3) run the pruning‐likelihood to get [P(x|0), P(x|1)]
+        Lm = prune_lik(root, theta).ravel()  # shape (2,)
+        total += max(Lm[0], Lm[1])
+
+    # 4) multiply by 1/2 (due to uniform root prior)
+    return 0.5 * total
 
 # --- Single replicate -------------------------------------------------------
 def run_rep(build_tree,
@@ -273,6 +299,8 @@ def run_my_phylo(build_tree, reps=500, n_leaves=8, theta=0.9,
 
     L1_vals = [L for L in L1_vals if L != 4] # remove evil L1 = 4 case
 
+    bayes_optimum = theoretical_root_accuracy(build_tree, n_leaves, theta, rng)
+
     print(f"  L1 | θ_err  | ML_true | ML_inf  | MR")
     for L1 in L1_vals:
         ok_list = []
@@ -325,6 +353,7 @@ def run_my_phylo(build_tree, reps=500, n_leaves=8, theta=0.9,
     # Overall inferred‑ML root accuracy
     plt.figure(figsize=(6,4))
     plt.plot(L1_vals, ml_inf_vals, 'o-')
+    plt.plot(L1_vals, [bayes_optimum] * len(L1_vals), '--', label="Bayes optimum")
     plt.xscale('log')
     plt.xlabel('Sequence length used for θ estimation L1')
     plt.ylabel('Overall root accuracy (ML inferred)')
@@ -341,6 +370,7 @@ def run_my_phylo(build_tree, reps=500, n_leaves=8, theta=0.9,
     ax1.plot(L1_vals, ml_true_vals, 'o-', label='ML (true topo)')
     ax1.plot(L1_vals, ml_inf_vals,  's-', label='ML (inferred)')
     ax1.plot(L1_vals, mr_vals,      'x--', label='Majority')
+    ax1.plot(L1_vals, [bayes_optimum] * len(L1_vals), '--', label="Bayes optimum")
     ax1.set_xscale('log'); ax1.set_title('Root Accuracy vs L1')
     ax1.set_xlabel('L1'); ax1.set_ylabel('Accuracy')
     ax1.legend(); ax1.grid(True)
@@ -353,6 +383,8 @@ def run_my_phylo(build_tree, reps=500, n_leaves=8, theta=0.9,
     ax3.plot(L1_vals, delta, 'o-')
     ax3.set_xscale('log'); ax3.set_title('Loss from Topology Error')
     ax3.set_xlabel('L1'); ax3.set_ylabel('ML (true) −ML (inf)'); ax3.grid(True)
+
+    fig.delaxes(ax4)
 
     plt.savefig(this_dir + "/summary.png")
     plt.close()
